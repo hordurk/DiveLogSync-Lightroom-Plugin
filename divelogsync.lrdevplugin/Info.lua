@@ -22,7 +22,7 @@ return {
 
 	LrToolkitIdentifier = 'us.hordur.divelogsync',
 	LrPluginName = "Dive log sync",
-	LrPluginInfoUrl = "https://hordur.us",
+	LrPluginInfoUrl = "https://github.com/hordurk/DiveLogSync-Lightroom-Plugin",
 	LrMetadataProvider = 'DiveLogMetadataDefs.lua',
 	LrMetadataTagsetFactory = 'DiveLogTagset.lua',
 
@@ -35,6 +35,6 @@ return {
 
 
 
-	VERSION = { major=1, minor=0, revision=0, build=1, },
+	VERSION = { major=1, minor=0, revision=1, build=2, },
 
 }
