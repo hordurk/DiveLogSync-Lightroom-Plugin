@@ -326,7 +326,7 @@ local function processFile(context, filename )
 					local temperature = (depths[dIndex-1].temperature + (depths[dIndex].temperature-depths[dIndex-1].temperature) * (relTime-depths[dIndex-1].time)/(depths[dIndex].time-depths[dIndex-1].time))
 
 					local newDepth = 0.3048*depth
-					local currentDepth = -photo:getRawMetadata("gpsAltitude") or 0
+					local currentDepth = -(photo:getRawMetadata("gpsAltitude") or 0)
 
 					outputToLog("Current depth: " .. currentDepth .. ". New depth: " .. newDepth)
 
