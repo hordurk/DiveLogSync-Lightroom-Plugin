@@ -23,6 +23,7 @@ end
 
 local mainProgress = {}
 
+-- Borrowed from https://github.com/philipbl/Day-One-Lightroom-Plugin/blob/35407a33e549855032abbd09709ce047cd17ae7c/dayone.lrdevplugin/ExportTask.lua
 local function split( str, delimiter )
     local result = { }
     local from  = 1
@@ -36,6 +37,7 @@ local function split( str, delimiter )
     return result
 end
 
+-- Modified from https://github.com/robmiracle/print_r/blob/master/print_r.lua to output to log instead of print
 local function print_r ( t )
     local print_r_cache={}
     local function sub_print_r(t,indent)
