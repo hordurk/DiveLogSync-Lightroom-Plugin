@@ -4,6 +4,10 @@ Lightroom plugin to get metadata from dive computer log files and add to the Lig
 Currently supports XML files exported from:
 - Shearwater Desktop
 - MacDive
+- Diving Log
+- UDDF (not properly tested yet)
+
+The parser is not yet robust to versioning of these formats, so old versions of those may not work as expected.
 
 The plugin currently grabs the runtime, depth, temperature and dive number from the dive log files
 and saves as metadata to matching photos by comparing the capture time of the photo to the time in

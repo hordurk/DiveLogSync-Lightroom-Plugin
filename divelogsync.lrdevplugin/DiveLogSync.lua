@@ -9,19 +9,15 @@ local LrApplication = import 'LrApplication'
 local LrTasks = import 'LrTasks'
 local LrProgressScope = import 'LrProgressScope'
 local LrFunctionContext = import 'LrFunctionContext'
+local LrPathUtils = import 'LrPathUtils'
 
--- Create the logger and enable the print function.
-
-local myLogger = LrLogger( 'libraryLogger' )
-myLogger:enable( "logfile" ) -- Pass either a string or a table of actions
+local logger = LrLogger( 'Lr_DiveLogSync' )
+logger:enable( "logfile" ) -- Pass either a string or a table of actions
 
 -- Write trace information to the logger.
-
-local function outputToLog( message )
-    myLogger:trace( message )
+function outputToLog( message )
+    logger:trace( message )
 end
-
-local mainProgress = {}
 
 -- Borrowed from https://github.com/philipbl/Day-One-Lightroom-Plugin/blob/35407a33e549855032abbd09709ce047cd17ae7c/dayone.lrdevplugin/ExportTask.lua
 local function split( str, delimiter )
@@ -72,51 +68,13 @@ local function print_r ( t )
     outputToLog()
 end
 
-Months = {
-    Jan=1,
-    Feb=2,
-    Mar=3,
-    Apr=4,
-    May=5,
-    Jun=6,
-    Jul=7,
-    Aug=8,
-    Sep=9,
-    Oct=10,
-    Nov=11,
-    Dec=12,
-}
 
-Days = {
-    Mon=1,
-    Tue=2,
-    Wed=3,
-    Thu=4,
-    Fri=5,
-    Sat=6,
-    Sun=7,
-}
 
-local function parseShearwaterDate( dateString )
-    local parts = split(dateString,' ')
-    local timeParts = split(parts[4],':')
-    local res = {}
-    -- res.weekDayName = parts[1]
-    -- res.weekDay = Days[parts[1]]
-    -- res.monthName = parts[2]
-    res.month = Months[parts[2]]
-    res.day = tonumber(parts[3])
-    -- res.time = parts[4]
-    res.year = tonumber(parts[5])
-    -- res.tz = parts[6]
-    res.hour = tonumber(timeParts[1])
-    res.minute = tonumber(timeParts[2])
-    res.second = tonumber(timeParts[3])
 
-    return res
-end
+local mainProgress = {}
 
-local function parseMacdiveDate( dateString )
+
+local function parseDate( dateString )
     local parts = split(dateString,' ')
     local dateParts = split(parts[1],'-')
     local timeParts = split(parts[2],':')
@@ -134,164 +92,48 @@ local function toLrDate( d )
     return LrDate.timeFromComponents( d.year, d.month, d.day, d.hour, d.minute, d.second, true )
 end
 
-local function parseDepths( depthString )
-    local depthLines = split( depthString, ';' )
-    print_r(depthLines)
-    local res = {}
-    for i,l in ipairs( depthLines ) do
-        local parts = split( l, ',' )
-        if #parts==3 then
-            res[ #res + 1 ] = {
-                time=tonumber(parts[1]),
-                depth=tonumber(parts[2]),
-                temperature=tonumber(parts[3]),
-            }
-        end
-    end
-    return res
-end
-
--- TODO: Change parsing of different formats to use a single/multiple XSL transforms, have those output a basic XML format with the required information and add a function that reads in that format.
-
-local function parseUDDFXML(xmlRoot)
-    local xsltProfile = [[<?xml version="1.0" encoding="UTF-8"?>
-    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"><xsl:output method="text"/><xsl:template match="/uddf"><xsl:for-each select="profiledata/repetitiongroup"><xsl:for-each select="dive"><xsl:value-of select="informationbeforedive/datetime"/>,<xsl:value-of select="informationafterdive/diveduration"/>,<xsl:value-of select="informationbeforedive/divenumber"/>@<xsl:for-each select="samples/waypoint"><xsl:value-of select="divetime"/>,<xsl:value-of select="depth"/>,<xsl:value-of select="temperature"/>;</xsl:for-each>|</xsl:for-each></xsl:for-each></xsl:template></xsl:stylesheet>
-    ]]
-
-    local parsedXml = xmlRoot:transform( xsltProfile )
-
-    print_r(parsedXml)
-
-    return nil
-
-    if parsedXml == nil or parsedXml == "" then
-        return nil
-    end
-
-    local res = {}
-
-    local dives = split( parsedXml, '|' )
-    for k, dive in pairs(dives) do
-        local d = {}
-
-        if dive ~= '' then
-
-            local diveParts = split( dive, '@' )
-            local dateParts = split( diveParts[1] , ',')
-
-            d.dates = dateParts
-            d.diveNo = tonumber(dateParts[3])
-
-            d.dateFrom = toLrDate(parseMacdiveDate(dateParts[1]))
-            d.dateTo = d.dateFrom + tonumber(dateParts[2])
-
-            d.depths = parseDepths( diveParts[2] )
-
-            res[ #res + 1 ] = d
-
-        end
-
-    end
-
-    return res
-
-end
-
-local function parseShearwaterXML(xmlRoot)
-    local res = {}
-
-
-
-    local xsltDates = [[<?xml version="1.0" encoding="UTF-8"?>
-    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"><xsl:output method="text"/><xsl:template match="/"><xsl:value-of select="dive/diveLog/startDate"/>,<xsl:value-of select="dive/diveLog/endDate"/>,<xsl:value-of select="dive/diveLog/number"/></xsl:template></xsl:stylesheet>
-    ]]
-
-    local xsltProfile = [[<?xml version="1.0" encoding="UTF-8"?>
-    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"><xsl:output method="text"/><xsl:template match="/"><xsl:for-each select="dive/diveLog/diveLogRecords/diveLogRecord"><xsl:value-of select="currentTime"/>,<xsl:value-of select="currentDepth"/>,<xsl:value-of select="waterTemp"/>;</xsl:for-each></xsl:template></xsl:stylesheet>
-    ]]
-
-    local dateString = xmlRoot:transform( xsltDates )
-
-    if dateString == nil or dateString == "," then
-        return nil
-    end
-
-    res.dates = split( dateString, ',' )
-
-    res.dateFrom = toLrDate(parseShearwaterDate(res.dates[1]))
-    res.dateTo = toLrDate(parseShearwaterDate(res.dates[2]))
-    res.diveNo = tonumber(res.dates[3])
-
-    res.depths = parseDepths( xmlRoot:transform( xsltProfile ) )
-
-    return {res}
-end
-
-local function parseMacdiveXML(xmlRoot)
-    local res = {}
-
-    local xsltProfile = [[<?xml version="1.0" encoding="UTF-8"?>
-    <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"><xsl:output method="text"/><xsl:template match="/"><xsl:for-each select="dives/dive"><xsl:value-of select="date"/>,<xsl:value-of select="duration"/>,<xsl:value-of select="diveNumber"/>@<xsl:for-each select="samples/sample"><xsl:value-of select="time"/>,<xsl:value-of select="depth"/>,<xsl:value-of select="temperature"/>;</xsl:for-each>|</xsl:for-each></xsl:template></xsl:stylesheet>
-    ]]
-
-    local parsedXml = xmlRoot:transform( xsltProfile )
-
-    if parsedXml == nil or parsedXml == "" then
-        return nil
-    end
-
-    local dives = split( parsedXml, '|' )
-    for k, dive in pairs(dives) do
-        local d = {}
-
-        if dive ~= '' then
-
-            local diveParts = split( dive, '@' )
-            local dateParts = split( diveParts[1] , ',')
-
-            d.dates = dateParts
-            d.diveNo = tonumber(dateParts[3])
-
-            d.dateFrom = toLrDate(parseMacdiveDate(dateParts[1]))
-            d.dateTo = d.dateFrom + tonumber(dateParts[2])
-
-            d.depths = parseDepths( diveParts[2] )
-
-            res[ #res + 1 ] = d
-
-        end
-
-    end
-
-    return res
-
-end
-
 local function parseXmlFile(filename)
-    xml = LrFileUtils.readFile(filename)
-    local diveData
+  -- Using method from Flickr plugin from Lightroom SDK Samples, convert XML to Lua script and execute that code
+  -- xml_to_lua.xslt defines the import for the different formats.
 
-    local xmlRoot = LrXml.parseXml(xml)
+  local xml = LrFileUtils.readFile(filename)
+  local xslt = LrFileUtils.readFile(LrPathUtils.child(_PLUGIN.path, 'xml_to_lua.xslt'))
+  local xmlRoot = LrXml.parseXml(xml)
+  local luaTableString = xmlRoot and xmlRoot:transform( xslt )
 
-    diveData = parseUDDFXML(xmlRoot)
+  local luaTableFunction = luaTableString and loadstring( luaTableString )
+  if luaTableFunction then
+    local diveListTable = LrFunctionContext.callWithEmptyEnvironment( luaTableFunction )
+    if diveListTable then
+      for k, dive in pairs(diveListTable) do -- do some date conversions, convert to lightroom format and figure out missing variables
+        -- Maybe need to do type conversions here?
 
-    if diveData ~= nil then
-        print_r(diveData)
-        outputToLog('UDDF!')
-        return diveData
+        dive.start_date = toLrDate(parseDate(dive.start_date))
+        if dive.end_date ~= '' then
+          dive.end_date = toLrDate(parseDate(dive.end_date))
+        elseif dive.duration ~= '' then
+            dive.end_date = dive.start_date + dive.duration
+        else
+          dive.end_date = dive.start_date + dive.profile[#dive.profile].runtime
+        end
+        if dive.duration == '' then
+          dive.duration = dive.end_date - dive.start_date
+        end
+        -- Maybe need to loop through dive.profile and do type conversions?
+      end
+
+      return diveListTable
+
     end
-    -- Try to parse xml as a Macdive XML
-    diveData = parseMacdiveXML(xmlRoot)
-    if diveData ~= nil then
-        print_r(diveData)
-        outputToLog('Mac dive!')
-        return diveData
-    end
 
-    -- Add more dive log formats here
-    diveData = parseShearwaterXML(xmlRoot)
-    return diveData
+  end
+
+  return nil
+
 end
+
+
+
 
 local function processFile(context, filename )
 
@@ -301,6 +143,7 @@ local function processFile(context, filename )
     print_r(divesData)
 
     if divesData == nil then
+        LrDialogs.message( "Unable to parse file: " .. filename )
         return 0
     end
 
@@ -319,12 +162,11 @@ local function processFile(context, filename )
     for diveNo, diveData in pairs(divesData) do
         if fileProgress:isCanceled() then break end
 
-        local dates = diveData.dates
-        local dateFrom = diveData.dateFrom
-        local dateTo = diveData.dateTo
-        local depths = diveData.depths
+        local dateFrom = diveData.start_date
+        local dateTo = diveData.end_date
+        local depths = diveData.profile
 
-            outputToLog("Finding photos between " .. dates[1] .. " and " .. dates[2])
+            outputToLog("Finding photos between " .. LrDate.timeToUserFormat( dateFrom, "%Y-%m-%d %H:%M:%S" ) .. " and " .. LrDate.timeToUserFormat( dateTo, "%Y-%m-%d %H:%M:%S" ))
 
             local progress = LrProgressScope({
             caption = "Matching photos with dive profile",
@@ -370,15 +212,15 @@ local function processFile(context, filename )
                     -- This photo timestamp relative to the start of the dive profile
                     local relTime = dateTime - dateFrom
                     -- Search the dive profile until we reach this photos timestatmp
-                    while relTime > depths[dIndex].time do
+                    while relTime > depths[dIndex].runtime do
                         dIndex = dIndex + 1
                     end
 
                     -- Linear interpolation of the depth
-                    local depth = (depths[dIndex-1].depth + (depths[dIndex].depth-depths[dIndex-1].depth) * (relTime-depths[dIndex-1].time)/(depths[dIndex].time-depths[dIndex-1].time))
-                    local temperature = (depths[dIndex-1].temperature + (depths[dIndex].temperature-depths[dIndex-1].temperature) * (relTime-depths[dIndex-1].time)/(depths[dIndex].time-depths[dIndex-1].time))
+                    local depth = (depths[dIndex-1].depth + (depths[dIndex].depth-depths[dIndex-1].depth) * (relTime-depths[dIndex-1].runtime)/(depths[dIndex].runtime-depths[dIndex-1].runtime))
+                    local temperature = (depths[dIndex-1].temperature + (depths[dIndex].temperature-depths[dIndex-1].temperature) * (relTime-depths[dIndex-1].runtime)/(depths[dIndex].runtime-depths[dIndex-1].runtime))
 
-                    local newDepth = 0.3048*depth
+                    local newDepth = depth
                     local currentDepth = -(photo:getRawMetadata("gpsAltitude") or 0)
 
                     outputToLog("Current depth: " .. currentDepth .. ". New depth: " .. newDepth)
@@ -390,7 +232,7 @@ local function processFile(context, filename )
                                 photo:setPropertyForPlugin( _PLUGIN, 'depth', newDepth )
                                 photo:setPropertyForPlugin( _PLUGIN, 'waterTemp', temperature )
                                 photo:setPropertyForPlugin( _PLUGIN, 'runTime', relTime )
-                                photo:setPropertyForPlugin( _PLUGIN, 'diveNo', diveData.diveNo )
+                                photo:setPropertyForPlugin( _PLUGIN, 'diveNo', diveData.number )
 
                                 photo:setRawMetadata("gpsAltitude", -newDepth) -- Convert depth to meters
                             end
@@ -431,9 +273,14 @@ local function showFileDialog()
           canChooseDirectories = false,
           canCreateDirectories = false,
           fileTypes = {
-            'xml',
+            'xml', 'udcf', 'uddf',
           },
         })
+
+        -- abort if no file was selected
+        if not files then
+          return
+        end
 
 
         LrTasks.startAsyncTask( function()
