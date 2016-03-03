@@ -101,9 +101,19 @@ local function parseXmlFile(filename)
   local xmlRoot = LrXml.parseXml(xml)
   local luaTableString = xmlRoot and xmlRoot:transform( xslt )
 
+  outputToLog('XSL Transform result:')
+  outputToLog(luaTableString)
+  outputToLog('=====================')
+
   local luaTableFunction = luaTableString and loadstring( luaTableString )
+  outputToLog('loadstring() result:')
+  print_r(luaTableFunction)
+  outputToLog('====================')
   if luaTableFunction then
     local diveListTable = LrFunctionContext.callWithEmptyEnvironment( luaTableFunction )
+    outputToLog('Dive list table:')
+    print_r(diveListTable)
+    outputToLog('================')
     if diveListTable then
       for k, dive in pairs(diveListTable) do -- do some date conversions, convert to lightroom format and figure out missing variables
         -- Maybe need to do type conversions here?
