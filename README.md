@@ -9,6 +9,7 @@ Currently supports XML files exported from:
 
 The plugin has been tested on the following platforms:
 - OS X, Lightroom CC 2015.4
+- Windows 8.1, Lightroom CC 2015.4
 
 The parser is not yet robust to versioning of these formats, so old versions of those may not work as expected.
 

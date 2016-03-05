@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
   <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:output method="text"/>
-    <xsl:template match="/">
-      return { <xsl:apply-templates/>
-      }
-    </xsl:template>
 
-    <xsl:template match="Divinglog">
+    <xsl:template match="/Divinglog">
+      return {
       <xsl:for-each select="Logbook/Dive">
         {
           start_date = "<xsl:value-of select="Divedate"/><xsl:text> </xsl:text><xsl:value-of select="Entrytime"/>:00",
@@ -30,10 +27,12 @@
           },
         },
       </xsl:for-each>
+      }
     </xsl:template>
 
     <!-- MacDive -->
-    <xsl:template match="dives">
+    <xsl:template match="/dives">
+      return {
       <xsl:variable name="units" select="units" />
       <xsl:for-each select="dive">
         {
@@ -58,10 +57,12 @@
           },
         },
       </xsl:for-each>
+      }
     </xsl:template>
 
     <!-- Shearwater -->
     <xsl:template match="dive">
+      return {
       <xsl:for-each select="diveLog">
         {
           start_date = "<xsl:call-template name="shearwater_date"><xsl:with-param name="d" select="startDate"/></xsl:call-template>",
@@ -85,9 +86,11 @@
           },
         },
       </xsl:for-each>
+      }
     </xsl:template>
 
     <xsl:template match="uddf">
+      return {
       <xsl:for-each select="profiledata/repetitiongroup">
         <xsl:for-each select="dive">
           {
@@ -113,6 +116,7 @@
           },
         </xsl:for-each>
       </xsl:for-each>
+      }
     </xsl:template>
 
     <xsl:template name="temperature_convert">
