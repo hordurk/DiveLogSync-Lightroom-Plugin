@@ -11,16 +11,20 @@
         {
           start_date = "<xsl:value-of select="Divedate"/><xsl:text> </xsl:text><xsl:value-of select="Entrytime"/>:00",
           end_date = "",
-          id = "",
-          lat = "",
-          lon = "",
+          id = "<xsl:value-of select="@ID"/>",
+          lat = "<xsl:value-of select="Place/Lat"/>",
+          lon = "<xsl:value-of select="Place/Lon"/>",
+          location = "<xsl:value-of select="Place/@Name"/>",
+          city = "<xsl:value-of select="City/@Name"/>",
+          stateProvince = "",
+          country = "<xsl:value-of select="Country/@Name"/>",
           duration = <xsl:value-of select="Divetime * 60"/>,
-          number = <xsl:value-of select="Number"/>,
+          dive_number = <xsl:value-of select="Number"/>,
           profile = {
             <xsl:for-each select="Profile/P">
-              { runtime = <xsl:value-of select="@Time"/>,
+              { run_time = <xsl:value-of select="@Time"/>,
                 depth = <xsl:value-of select="Depth"/>,
-                temperature = <xsl:value-of select="Temp"/>,
+                water_temperature = <xsl:value-of select="Temp"/>,
               },
             </xsl:for-each>
           },
@@ -28,21 +32,27 @@
       </xsl:for-each>
     </xsl:template>
 
+    <!-- MacDive -->
     <xsl:template match="dives">
+      <xsl:variable name="units" select="units" />
       <xsl:for-each select="dive">
         {
           start_date = "<xsl:value-of select="date"/>",
           end_date = "",
-          id = "",
-          lat = "",
-          lon = "",
+          id = "<xsl:value-of select="identifier"/>",
+          lat = "<xsl:value-of select="site/lat"/>",
+          lon = "<xsl:value-of select="site/lon"/>",
+          location = "<xsl:value-of select="site/name"/>",
+          city = "<xsl:value-of select="site/location"/>",
+          stateProvince = "",
+          country = "<xsl:value-of select="site/country"/>",
           duration = <xsl:value-of select="duration"/>,
-          number = <xsl:value-of select="diveNumber"/>,
+          dive_number = <xsl:value-of select="diveNumber"/>,
           profile = {
             <xsl:for-each select="samples/sample">
-              { runtime = <xsl:value-of select="time"/>,
-                depth = <xsl:value-of select="depth"/>,
-                temperature = <xsl:value-of select="temperature"/>,
+              { run_time = <xsl:value-of select="time"/>,
+                depth = <xsl:call-template name="depth_convert"><xsl:with-param name="depth" select="depth"/><xsl:with-param name="units" select="$units"/></xsl:call-template>,
+                water_temperature = <xsl:call-template name="temperature_convert"><xsl:with-param name="temperature" select="temperature"/><xsl:with-param name="units" select="$units"/></xsl:call-template>,
               },
             </xsl:for-each>
           },
@@ -50,6 +60,7 @@
       </xsl:for-each>
     </xsl:template>
 
+    <!-- Shearwater -->
     <xsl:template match="dive">
       <xsl:for-each select="diveLog">
         {
@@ -58,13 +69,17 @@
           id = "",
           lat = "",
           lon = "",
+          location = "",
+          city = "",
+          stateProvince = "",
+          country = "",
           duration = "",
-          number = <xsl:value-of select="number"/>,
+          dive_number = <xsl:value-of select="number"/>,
           profile = {
             <xsl:for-each select="diveLogRecords/diveLogRecord">
-              { runtime = <xsl:value-of select="currentTime"/>,
+              { run_time = <xsl:value-of select="currentTime"/>,
                 depth = <xsl:value-of select="currentDepth * 0.3048"/>,
-                temperature = <xsl:value-of select="waterTemp"/>,
+                water_temperature = <xsl:value-of select="(waterTemp - 32) * 0.55555555555"/>,
               },
             </xsl:for-each>
           },
@@ -81,19 +96,41 @@
             id = "",
             lat = "",
             lon = "",
+            location = "",
+            city = "",
+            stateProvince = "",
+            country = "",
             duration = <xsl:value-of select="informationafterdive/diveduration"/>,
-            number = <xsl:value-of select="informationbeforedive/divenumber"/>,
+            dive_number = <xsl:value-of select="informationbeforedive/divenumber"/>,
             profile = {
               <xsl:for-each select="samples/waypoint">
-                { runtime = <xsl:value-of select="divetime"/>,
+                { run_time = <xsl:value-of select="divetime"/>,
                   depth = <xsl:value-of select="depth"/>,
-                  temperature = <xsl:value-of select="temperature"/>,
+                  water_temperature = <xsl:value-of select="temperature"/>,
                 },
               </xsl:for-each>
             },
           },
         </xsl:for-each>
       </xsl:for-each>
+    </xsl:template>
+
+    <xsl:template name="temperature_convert">
+      <xsl:param name="temperature" />
+      <xsl:param name="units" />
+      <xsl:choose>
+        <xsl:when test="$units = 'Metric'"><xsl:value-of select="$temperature"/></xsl:when>
+        <xsl:when test="$units = 'Imperial'"><xsl:value-of select="($temperature - 32) * 0.55555555555"/></xsl:when>
+      </xsl:choose>
+    </xsl:template>
+
+    <xsl:template name="depth_convert">
+      <xsl:param name="depth" />
+      <xsl:param name="units" />
+      <xsl:choose>
+      <xsl:when test="$units = 'Metric'"><xsl:value-of select="$depth"/></xsl:when>
+      <xsl:when test="$units = 'Imperial'"><xsl:value-of select="$depth * 0.3048"/></xsl:when>
+      </xsl:choose>
     </xsl:template>
 
     <xsl:template name="shearwater_date">
@@ -107,18 +144,18 @@
       <xsl:variable name="rest4" select="substring-after($rest3, ' ')"/>
       <xsl:variable name="yyyy" select="substring-before($rest4, ' ')"/>
       <xsl:value-of select="$yyyy"/>-<xsl:choose>
-        <xsl:when test="$mmm = 'Jan'">01</xsl:when>
-        <xsl:when test="$mmm = 'Feb'">02</xsl:when>
-        <xsl:when test="$mmm = 'Mar'">03</xsl:when>
-        <xsl:when test="$mmm = 'Apr'">04</xsl:when>
-        <xsl:when test="$mmm = 'May'">05</xsl:when>
-        <xsl:when test="$mmm = 'Jun'">06</xsl:when>
-        <xsl:when test="$mmm = 'Jul'">07</xsl:when>
-        <xsl:when test="$mmm = 'Aug'">08</xsl:when>
-        <xsl:when test="$mmm = 'Sep'">09</xsl:when>
-        <xsl:when test="$mmm = 'Oct'">10</xsl:when>
-        <xsl:when test="$mmm = 'Nov'">11</xsl:when>
-        <xsl:when test="$mmm = 'Dec'">12</xsl:when>
+      <xsl:when test="$mmm = 'Jan'">01</xsl:when>
+      <xsl:when test="$mmm = 'Feb'">02</xsl:when>
+      <xsl:when test="$mmm = 'Mar'">03</xsl:when>
+      <xsl:when test="$mmm = 'Apr'">04</xsl:when>
+      <xsl:when test="$mmm = 'May'">05</xsl:when>
+      <xsl:when test="$mmm = 'Jun'">06</xsl:when>
+      <xsl:when test="$mmm = 'Jul'">07</xsl:when>
+      <xsl:when test="$mmm = 'Aug'">08</xsl:when>
+      <xsl:when test="$mmm = 'Sep'">09</xsl:when>
+      <xsl:when test="$mmm = 'Oct'">10</xsl:when>
+      <xsl:when test="$mmm = 'Nov'">11</xsl:when>
+      <xsl:when test="$mmm = 'Dec'">12</xsl:when>
       </xsl:choose>-<xsl:value-of select="$dd"/><xsl:text> </xsl:text><xsl:value-of select="$time"/>
     </xsl:template>
 

@@ -1,7 +1,7 @@
 return {
   metadataFieldsForPhotos = {
     {
-      id = 'diveNo',
+      id = 'dive_number',
       title = 'Dive Number'
     },
     {
@@ -9,17 +9,21 @@ return {
       title = 'Depth',
     },
     {
-      id = 'waterTemp',
+      id = 'water_temperature',
       title = 'Water Temperature',
     },
     {
-      id = 'runTime',
+      id = 'run_time',
       title = 'Run Time',
     },
     {
-      id = 'diveSite',
+      id = 'dive_site',
       title = 'Dive Site',
     },
+    {
+      id = 'id',
+      title = 'Dive ID',
+    },
   },
-  schemaVersion = 1,
+  schemaVersion = 2,
 }
