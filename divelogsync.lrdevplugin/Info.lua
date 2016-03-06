@@ -38,6 +38,6 @@ return {
 	LrInitPlugin = 'DLSInit.lua',
 
 
-	VERSION = { major=1, minor=2, revision=1, build=20160305, },
+	VERSION = { major=1, minor=2, revision=2, build=20160306, },
 
 }

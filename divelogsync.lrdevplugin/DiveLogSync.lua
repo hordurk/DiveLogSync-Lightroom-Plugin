@@ -113,6 +113,7 @@ end
 local function extractValue(diveData, prop_desc, relTime, i)
   local id = prop_desc.id
   local val
+  outputToLog("extractValue: " .. id)
 
   if prop_desc.c_id ~= nil then
     id = prop_desc.c_id
@@ -126,25 +127,23 @@ local function extractValue(diveData, prop_desc, relTime, i)
     return val
   end
 
-  local val
   if prop_desc.get_func then
-    val = prop_desc.get_func(diveData.profile[i])
+    val = prop_desc.get_func(diveData,i)
   else
     val = diveData.profile[i][id]
   end
 
   if val ~= nil then
-    local res = diveData.profile[i][id]
     if prop_desc.interpolate then
-      res = interpolate(relTime, diveData.profile[i-1].run_time, diveData.profile[i].run_time, diveData.profile[i-1][id], diveData.profile[i][id])
+      val = interpolate(relTime, diveData.profile[i-1].run_time, diveData.profile[i].run_time, diveData.profile[i-1][id], diveData.profile[i][id])
     end
     if prop_desc.func then
-      res = prop_desc.func(res)
+      val = prop_desc.func(val)
     end
     if prop_desc.type == 'string' then
-      res = LrStringUtils.trimWhitespace(res)
+      val = LrStringUtils.trimWhitespace(val)
     end
-    return res
+    return val
   end
 
   return nil
@@ -155,13 +154,14 @@ local function processFile(context, filename )
 
     local divesData = parseXmlFile(filename)
 
-    outputToLog('Parsed from dive log:')
-    print_r(divesData)
-
     if divesData == nil then
         LrDialogs.message( "Unable to parse file: " .. filename )
         return 0
     end
+
+    outputToLog('Parsed from dive log:')
+    print_r(divesData)
+    outputToLog("/Parsed from dive log")
 
     local count = 0
     local updated = 0
@@ -177,7 +177,6 @@ local function processFile(context, filename )
 
     for diveNo, diveData in pairs(divesData) do
         if fileProgress:isCanceled() then break end
-
 
             outputToLog("Finding photos between " .. LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d %H:%M:%S" ) .. " and " .. LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d %H:%M:%S" ))
 
@@ -217,10 +216,11 @@ local function processFile(context, filename )
             for k, photo in pairs( foundPhotos) do
                 if progress:isCanceled() then break end
                 i = i + 1
-                outputToLog(photo:getFormattedMetadata("fileName"))
+                outputToLog("Processing photo: " .. photo:getFormattedMetadata("fileName"))
                 local dateTime = photo:getRawMetadata("dateTimeOriginal")
                 -- Only consider photos taken during the dive
                 if dateTime >= diveData.start_date and dateTime <= diveData.end_date then
+                  outputToLog("Photo is within dive profile bounds.")
                     count = count + 1
                     -- This photo timestamp relative to the start of the dive profile
                     local relTime = dateTime - diveData.start_date
@@ -233,7 +233,9 @@ local function processFile(context, filename )
                         function()
                           local u = false
                           for k,v in pairs(DLSpropertyDefinitions.lightroom) do
+                            outputToLog(string.format("Property: %s.", v.id))
                             local val = extractValue(diveData, v, relTime, dIndex)
+                            outputToLog(string.format("Value: %s", val))
                             if val ~= nil and val ~= '' then
                               local current_val
                               if v.type ~= nil and v.type == 'string' then
@@ -241,31 +243,45 @@ local function processFile(context, filename )
                               else
                                 current_val = photo:getRawMetadata(v.id)
                               end
+                              outputToLog(string.format("Current value: %s", current_val))
                               if shouldWrite(v.id, prefs, current_val, val) then
+                                outputToLog("Writing new property value to catalog.")
                                   photo:setRawMetadata(v.id, val)
                                   u = true
                               end
                             end
+                            outputToLog("/Property")
                           end
                           for k,v in pairs(DLSpropertyDefinitions.plugin) do
+                            outputToLog(string.format("Property: %s.", v.id))
                             local val = extractValue(diveData, v, relTime, dIndex)
+                            outputToLog(string.format("Value: %s", val))
                             if val ~= nil and val ~= '' then
                               local current_val = photo:getPropertyForPlugin(v.plugin, v.id)
+                              outputToLog(string.format("Current value: %s", current_val))
 
                               if shouldWrite(v.id, prefs, current_val, val) then
+                                  outputToLog("Writing new property value to catalog.")
                                   photo:setPropertyForPlugin(v.plugin, v.id, val)
                                   u = true
                               end
                             end
+                            outputToLog("/Property")
                           end
+                          outputToLog(u)
+                          outputToLog(updated)
                           if u then
                             updated = updated + 1
                           end
+                          outputToLog("exit write access")
                         end
                     )
+
                 end
+                outputToLog("Done processing " .. photo:getFormattedMetadata("fileName"))
 
                 progress:setPortionComplete( i, #foundPhotos )
+                outputToLog("Portion complete")
 
             end
             progress:done()
@@ -317,18 +333,23 @@ end
 local function showFileDialog()
   local prefs = LrPrefs.prefsForPlugin()
 
+  outputToLog("Preferences:")
   for k,v in prefs:pairs() do
-    outputToLog(k .. '=')
-    outputToLog(v)
+    outputToLog(string.format("%s = %s", k, v))
   end
+  outputToLog("/Preferences")
 
   if prefs.showMetadataDialog then
+    outputToLog("Showing Metadata dialog")
     local d = LrFunctionContext.callWithContext( 'metadataSelectDialog', showMetadataSelectDialog)
 
     if not d then
+      outputToLog("User hit cancel, aborting.")
       return
     end
   end
+
+  outputToLog("Showing file dialog")
 
       local files = LrDialogs.runOpenPanel(
         {
@@ -344,15 +365,18 @@ local function showFileDialog()
 
         -- abort if no file was selected
         if not files then
+          outputToLog("No files selected, aborting.")
           return
         end
+
+        outputToLog("File selection:")
+        print_r(files)
+        outputToLog("/File selection")
 
 
         LrTasks.startAsyncTask( function()
 
         LrFunctionContext.callWithContext( "mainTask", function( context )
-
-          print_r(files)
 
             local mainProgress = LrProgressScope {
                 title = 'Parsing dive profiles',
@@ -366,14 +390,18 @@ local function showFileDialog()
 
           for k,file in pairs(files) do
                 if mainProgress:isCanceled() then break end
-            outputToLog("Reading file " .. file)
+                outputToLog("Reading file " .. file)
                 totalUpdated = totalUpdated + LrFunctionContext.callWithContext("processFile", processFile, file)
                 mainProgress:setPortionComplete(k,#files)
           end
 
+            outputToLog("Done processing files.")
+
             mainProgress:done()
 
             LrDialogs.message( "Updated metadata for " .. totalUpdated .. " photos." )
+
+            outputToLog("Updated metadata for " .. totalUpdated .. " photos.")
 
         end)
 

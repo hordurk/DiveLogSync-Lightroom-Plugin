@@ -55,6 +55,15 @@ function pluginInfoProvider.sectionsForTopOfDialog(f, pt)
 				},
 
         f:row {
+					spacing = f:control_spacing(),
+
+					f:checkbox {
+						title = "Write debug log",
+						value = bind('writeDebugLog'),
+					},
+				},
+
+        f:row {
           f:group_box { -- the buttons in this container make a set title = "Radio Buttons",
             fill_horizontal = 1,
             spacing = f:control_spacing(),

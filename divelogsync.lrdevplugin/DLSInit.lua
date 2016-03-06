@@ -5,6 +5,7 @@ require "Utils"
 local DLSdefaults = {
   showMetadataDialog = true,
   units = 'ft',
+  writeDebugLog = false,
 }
 
 outputToLog("Plugin loaded.")

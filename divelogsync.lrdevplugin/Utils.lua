@@ -8,7 +8,10 @@ logger:enable( "logfile" ) -- Pass either a string or a table of actions
 
 -- Write trace information to the logger.
 function outputToLog( message )
+  local prefs = LrPrefs.prefsForPlugin()
+  if prefs.writeDebugLog then
     logger:trace( message )
+  end
 end
 
 -- Borrowed from https://github.com/philipbl/Day-One-Lightroom-Plugin/blob/35407a33e549855032abbd09709ce047cd17ae7c/dayone.lrdevplugin/ExportTask.lua
@@ -89,9 +92,9 @@ local function convertTemperature(val)
   return val
 end
 
-local function getLatLon(vals)
+local function getLatLon(vals,i)
   if vals.lat ~= nil and vals.lat ~= '' and vals.lat ~= 0 and vals.lon ~= nil and vals.lon ~= '' and vals.lon ~= 0 then
-    return sprintf('%f,%f', vals.lat, vals.lon)
+    return { latitude = tonumber(vals.lat), longitude = tonumber(vals.lon) }
   end
   return nil
 end
@@ -106,6 +109,7 @@ DLSpropertyDefinitions =
       interpolate = true,
       func = convertAltitude,
       c_id  = 'depth',
+      type = 'number',
     },
     {
       title = 'GPS lat/lon',
@@ -143,6 +147,7 @@ DLSpropertyDefinitions =
       title = 'Run time',
       id = 'run_time',
       plugin = _PLUGIN,
+      type = 'number',
     },
     {
       title = 'Depth',
@@ -150,6 +155,7 @@ DLSpropertyDefinitions =
       plugin = _PLUGIN,
       interpolate = true,
       func = convertDepth,
+      type = 'number',
     },
     {
       title = 'Water temperature',
@@ -157,12 +163,14 @@ DLSpropertyDefinitions =
       plugin = _PLUGIN,
       interpolate = true,
       func = convertTemperature,
+      type = 'number',
     },
     {
       title = 'Dive number',
       id = 'dive_number',
       plugin = _PLUGIN,
       interpolate = false,
+      type = 'number',
     },
     {
       title = 'Dive site',
@@ -170,11 +178,13 @@ DLSpropertyDefinitions =
       plugin = _PLUGIN,
       interpolate = false,
       c_id = 'location',
+      type = 'string',
     },
     {
       title = 'Dive ID',
       id = 'id',
       plugin = _PLUGIN,
+      type = 'string',
     }
   },
 }
