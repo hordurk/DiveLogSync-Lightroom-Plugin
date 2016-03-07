@@ -217,7 +217,21 @@ local function processFile(context, filename )
                 if progress:isCanceled() then break end
                 i = i + 1
                 outputToLog("Processing photo: " .. photo:getFormattedMetadata("fileName"))
-                local dateTime = photo:getRawMetadata("dateTimeOriginal")
+
+                -- Lightroom has multiple datetimes for a photo. Fetch them all for debug output.
+                local dateTimeOriginal = photo:getRawMetadata("dateTimeOriginal")
+                local dateTimeDigitized = photo:getRawMetadata("dateTimeDigitized")
+                local dateTime = photo:getRawMetadata("dateTime")
+
+                outputToLog(string.format("dateTimeOriginal: %s %s", dateTimeOriginal,LrDate.timeToUserFormat( dateTimeOriginal or 0, "%Y-%m-%d %H:%M:%S" )))
+                outputToLog(string.format("dateTimeDigitized: %s %s", dateTimeDigitized,LrDate.timeToUserFormat( dateTimeDigitized or 0, "%Y-%m-%d %H:%M:%S" )))
+                outputToLog(string.format("dateTime: %s %s",dateTime,LrDate.timeToUserFormat( dateTime or 0, "%Y-%m-%d %H:%M:%S" )))
+
+                -- Prefer original timestamp. If that is missing, use dateTime or lastly digitized timestamp. original seems to get edited when one edits a photo.
+                dateTime = dateTimeOriginal or dateTime or dateTimeDigitized or 0 -- last resort, use 0 instead of nil to not fail on the comparison
+
+                outputToLog(string.format("dateTime: %s %s",dateTime,LrDate.timeToUserFormat( dateTime or 0, "%Y-%m-%d %H:%M:%S" )))
+
                 -- Only consider photos taken during the dive
                 if dateTime >= diveData.start_date and dateTime <= diveData.end_date then
                   outputToLog("Photo is within dive profile bounds.")
