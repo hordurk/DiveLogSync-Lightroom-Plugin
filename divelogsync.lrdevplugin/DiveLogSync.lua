@@ -93,6 +93,7 @@ local function interpolate(x, x0, x1, y0, y1)
 end
 
 local function shouldWrite(id, prefs, current_val, new_val)
+  -- TODO add support for comparing tables, such as GPS.
   if current_val == new_val then
     return false
   end
