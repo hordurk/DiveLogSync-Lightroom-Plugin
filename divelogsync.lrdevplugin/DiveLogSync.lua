@@ -176,6 +176,10 @@ local function processFile(context, filename )
 
     fileProgress:setPortionComplete( 0, #divesData )
 
+    local catalog = LrApplication.activeCatalog()
+    catalog:withWriteAccessDo("Sync metadata from " .. LrPathUtils.leafName(filename),
+        function()
+
     for diveNo, diveData in pairs(divesData) do
         if fileProgress:isCanceled() then break end
 
@@ -188,7 +192,7 @@ local function processFile(context, filename )
           })
             progress:setCancelable(true)
 
-            local catalog = LrApplication.activeCatalog()
+
 
             local foundPhotos = catalog:findPhotos {
               sort = "captureTime",
@@ -239,13 +243,13 @@ local function processFile(context, filename )
                     count = count + 1
                     -- This photo timestamp relative to the start of the dive profile
                     local relTime = dateTime - diveData.start_date
+                    outputToLog(string.format("Photo runtime: %f", relTime))
                     -- Search the dive profile until we reach this photos timestatmp
-                    while relTime > diveData.profile[dIndex].run_time do
+                    while dIndex < #diveData.profile and relTime > diveData.profile[dIndex].run_time do
                         dIndex = dIndex + 1
                     end
 
-                    catalog:withWriteAccessDo("Update metadata for " .. photo:getFormattedMetadata("fileName"),
-                        function()
+
                           local u = false
                           for k,v in pairs(DLSpropertyDefinitions.lightroom) do
                             outputToLog(string.format("Property: %s.", v.id))
@@ -289,8 +293,7 @@ local function processFile(context, filename )
                             updated = updated + 1
                           end
                           outputToLog("exit write access")
-                        end
-                    )
+
 
                 end
                 outputToLog("Done processing " .. photo:getFormattedMetadata("fileName"))
@@ -303,6 +306,8 @@ local function processFile(context, filename )
             fileProgress:setPortionComplete( diveNo, #divesData )
 
         end
+
+      end)
 
         fileProgress:done()
 
