@@ -150,6 +150,14 @@ local function extractValue(diveData, prop_desc, relTime, i)
   return nil
 end
 
+local function iif(test, res_true, res_false)
+  if test then
+    return res_true
+  else
+    return res_false
+  end
+end
+
 local function processFile(context, filename )
   local prefs = LrPrefs.prefsForPlugin()
 
@@ -178,7 +186,7 @@ local function processFile(context, filename )
 
     local catalog = LrApplication.activeCatalog()
     catalog:withWriteAccessDo("Sync metadata from " .. LrPathUtils.leafName(filename),
-        function()
+        function(context)
 
     for diveNo, diveData in pairs(divesData) do
         if fileProgress:isCanceled() then break end
@@ -192,25 +200,44 @@ local function processFile(context, filename )
           })
             progress:setCancelable(true)
 
+            local captureTimeSearchDesc = {
+              criteria = "captureTime",
+              operation = "in",
+              value = LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d" ),
+              value2 = LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d" ),
+          }
+            local searchDesc = {
+              captureTimeSearchDesc,
+            {
+                criteria = "fileFormat",
+                operation = "!=",
+                value = "VIDEO",
+            },
+            combine = "intersect",
+          }
 
+            if(prefs.doVideos) then
+              searchDesc = captureTimeSearchDesc
+            end
 
             local foundPhotos = catalog:findPhotos {
               sort = "captureTime",
               ascending = true,
-              searchDesc = {
-                            {
-                      criteria = "fileFormat",
-                      operation = "!=",
-                      value = "VIDEO",
-                  },
-                  {
-                      criteria = "captureTime",
-                      operation = "in",
-                      value = LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d" ),
-                      value2 = LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d" ),
-                  },
-                  combine = "intersect",
-              }
+              searchDesc = searchDesc,
+              -- searchDesc = {
+              --     iif(prefs.doVideos, {}, {
+              --         criteria = "fileFormat",
+              --         operation = "!=",
+              --         value = "VIDEO",
+              --     }),
+              --     {
+              --         criteria = "captureTime",
+              --         operation = "in",
+              --         value = LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d" ),
+              --         value2 = LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d" ),
+              --     },
+              --     combine = "intersect",
+              -- }
           }
 
             progress:setPortionComplete( 0, #foundPhotos )
@@ -419,9 +446,9 @@ local function showFileDialog()
 
             mainProgress:done()
 
-            LrDialogs.message( "Updated metadata for " .. totalUpdated .. " photos." )
+            LrDialogs.message( "Updated metadata for " .. totalUpdated .. " photos/videos." )
 
-            outputToLog("Updated metadata for " .. totalUpdated .. " photos.")
+            outputToLog("Updated metadata for " .. totalUpdated .. " photos/videos.")
 
         end)
 

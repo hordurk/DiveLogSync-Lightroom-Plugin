@@ -6,6 +6,7 @@ local DLSdefaults = {
   showMetadataDialog = true,
   units = 'ft',
   writeDebugLog = false,
+  doVideos = false,
 }
 
 outputToLog("Plugin loaded.")

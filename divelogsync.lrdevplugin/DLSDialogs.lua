@@ -125,6 +125,15 @@ If the field is empty in the dive log it will never be copied over.]],
     fill_horizontal = 1,
     spacing = f:label_spacing(),
     f:checkbox {
+      title = "Update video metadata?",
+      value = bind("doVideos"),
+    },
+  }
+
+  content[#content+1] = f:row {
+    fill_horizontal = 1,
+    spacing = f:label_spacing(),
+    f:checkbox {
       title = "Always show this dialog?",
       value = bind("showMetadataDialog"),
     },
