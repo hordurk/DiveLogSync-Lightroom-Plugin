@@ -1,6 +1,7 @@
 local LrLogger = import "LrLogger"
 local LrStringUtils = import "LrStringUtils"
 local LrPrefs 		= import 'LrPrefs'
+local LrDate = import 'LrDate'
 
 
 local logger = LrLogger( 'Lr_DiveLogSync' )
@@ -11,6 +12,15 @@ function outputToLog( message )
   local prefs = LrPrefs.prefsForPlugin()
   if prefs.writeDebugLog then
     logger:trace( message )
+  end
+end
+
+function outputToLogVar( message, v )
+  if type(v) == "table" then
+    outputToLog(string.format("%s:",message))
+    print_r(v)
+  else
+    outputToLog(string.format("%s: %s", message, v))
   end
 end
 
@@ -68,7 +78,70 @@ function print_r ( t )
     outputToLog()
 end
 
+function parseDate( dateString )
+    local parts = split(dateString,' ')
+    local dateParts = split(parts[1],'-')
+    local timeParts = split(parts[2],':')
+    local res = {}
+    res.year = tonumber(dateParts[1])
+    res.month = tonumber(dateParts[2])
+    res.day = tonumber(dateParts[3])
+    res.hour = tonumber(timeParts[1])
+    res.minute = tonumber(timeParts[2])
+    res.second = tonumber(timeParts[3])
+    return res
+end
 
+function toLrDate( d )
+    return LrDate.timeFromComponents( d.year, d.month, d.day, d.hour, d.minute, d.second, true )
+end
+
+function iif(test, res_true, res_false)
+  if test then
+    return res_true
+  else
+    return res_false
+  end
+end
+
+function interpolate(x, x0, x1, y0, y1)
+  return (y0 + (y1-y0) * (x-x0)/(x1-x0))
+end
+
+function compare(val1,val2)
+  if type(val1)~=type(val2) then
+    return false
+  end
+
+  if type(val1)=="table" then
+    if val1==val2 then
+      return true
+    end
+    for k,v in pairs(val1) do
+      if val2[k] == nil or not compare(v,val2[k]) then
+        return false
+      end
+    end
+    for k,v in pairs(val2) do
+      if val1[k] == nil or not compare(v,val1[k]) then
+        return false
+      end
+    end
+    return true
+  elseif type(val1)=="number" then
+    if math.abs(val1-val2) < 0.0001 then
+      return true
+    else
+      return false
+    end
+  else
+    if val1==val2 then
+      return true
+    else
+      return false
+    end
+  end
+end
 
 local function convertDepth(val)
   local prefs = LrPrefs.prefsForPlugin()

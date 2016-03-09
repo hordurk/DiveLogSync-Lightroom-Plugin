@@ -20,24 +20,6 @@ require "DLSDialogs"
 local mainProgress = {}
 
 
-local function parseDate( dateString )
-    local parts = split(dateString,' ')
-    local dateParts = split(parts[1],'-')
-    local timeParts = split(parts[2],':')
-    local res = {}
-    res.year = tonumber(dateParts[1])
-    res.month = tonumber(dateParts[2])
-    res.day = tonumber(dateParts[3])
-    res.hour = tonumber(timeParts[1])
-    res.minute = tonumber(timeParts[2])
-    res.second = tonumber(timeParts[3])
-    return res
-end
-
-local function toLrDate( d )
-    return LrDate.timeFromComponents( d.year, d.month, d.day, d.hour, d.minute, d.second, true )
-end
-
 local function parseXmlFile(filename)
   -- Using method from Flickr plugin from Lightroom SDK Samples, convert XML to Lua script and execute that code
   -- xml_to_lua.xslt defines the import for the different formats.
@@ -57,25 +39,22 @@ local function parseXmlFile(filename)
   outputToLog('====================')
   if luaTableFunction then
     local diveListTable = LrFunctionContext.callWithEmptyEnvironment( luaTableFunction )
-    outputToLog('Dive list table:')
-    print_r(diveListTable)
-    outputToLog('================')
     if diveListTable then
       for k, dive in pairs(diveListTable) do -- do some date conversions, convert to lightroom format and figure out missing variables
         -- Maybe need to do type conversions here?
 
         dive.start_date = toLrDate(parseDate(dive.start_date))
-        if dive.end_date ~= '' then
+        if dive.end_date ~= nil and dive.end_date ~= '' then
           dive.end_date = toLrDate(parseDate(dive.end_date))
-        elseif dive.duration ~= '' then
+        elseif dive.duration ~= nil and dive.duration ~= '' then
             dive.end_date = dive.start_date + dive.duration
         else
           dive.end_date = dive.start_date + dive.profile[#dive.profile].runtime
         end
-        if dive.duration == '' then
+        if dive.duration == nil or dive.duration == '' then
           dive.duration = dive.end_date - dive.start_date
         end
-        -- Maybe need to loop through dive.profile and do type conversions?
+        -- Maybe should loop through dive.profile and do type conversions?
       end
 
       return diveListTable
@@ -88,44 +67,7 @@ local function parseXmlFile(filename)
 
 end
 
-local function interpolate(x, x0, x1, y0, y1)
-  return (y0 + (y1-y0) * (x-x0)/(x1-x0))
-end
 
-local function compare(val1,val2)
-  if type(val1)~=type(val2) then
-    return false
-  end
-
-  if type(val1)=="table" then
-    if val1==val2 then
-      return true
-    end
-    for k,v in pairs(val1) do
-      if val2[k] == nil or not compare(v,val2[k]) then
-        return false
-      end
-    end
-    for k,v in pairs(val2) do
-      if val1[k] == nil or not compare(v,val1[k]) then
-        return false
-      end
-    end
-    return true
-  elseif type(val1)=="number" then
-    if math.abs(val1-val2) < 0.0001 then
-      return true
-    else
-      return false
-    end
-  else
-    if val1==val2 then
-      return true
-    else
-      return false
-    end
-  end
-end
 
 local function shouldWrite(id, prefs, current_val, new_val)
   if compare(current_val,new_val) then
@@ -146,6 +88,10 @@ local function shouldWrite(id, prefs, current_val, new_val)
 end
 
 local function extractValue(diveData, prop_desc, relTime, i)
+  if diveData == nil or prop_desc == nil or diveData.profile == nil then
+    return nil
+  end
+
   local id = prop_desc.id
   local val
 
@@ -164,6 +110,7 @@ local function extractValue(diveData, prop_desc, relTime, i)
   if prop_desc.get_func then
     val = prop_desc.get_func(diveData,i)
   else
+    if diveData.profile[i] == nil then return nil end
     val = diveData.profile[i][id]
   end
 
@@ -183,13 +130,7 @@ local function extractValue(diveData, prop_desc, relTime, i)
   return nil
 end
 
-local function iif(test, res_true, res_false)
-  if test then
-    return res_true
-  else
-    return res_false
-  end
-end
+
 
 local function processFile(context, filename )
   local prefs = LrPrefs.prefsForPlugin()
@@ -206,7 +147,7 @@ local function processFile(context, filename )
     outputToLog("/Parsed from dive log")
 
     local count = 0
-    local updated = 0
+    local numUpdated = 0
 
     local fileProgress = LrProgressScope({
         caption = "Processing file",
@@ -222,6 +163,11 @@ local function processFile(context, filename )
 
     for diveNo, diveData in pairs(divesData) do
         if fileProgress:isCanceled() then break end
+
+        if diveData == nil or diveData.start_date == nil or diveData.end_date == nil then
+          outputToLog("Problem with diveData")
+          break
+        end
 
             outputToLog("Finding photos between " .. LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d %H:%M:%S" ) .. " and " .. LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d %H:%M:%S" ))
 
@@ -297,13 +243,13 @@ local function processFile(context, filename )
 
                     catalog:withWriteAccessDo("metadata update for " .. LrPathUtils.leafName(photoName),
                         function(context)
-                          outputToLog("start write access for " .. photoName)
+                          outputToLogVar("Start write access for",photoName)
 
-                          local u = false
+                          local updated = false
                           for k,v in pairs(DLSpropertyDefinitions) do
-                            outputToLog(string.format("Property: %s.", v.id))
+                            outputToLogVar("Property",v.id)
                             local val = extractValue(diveData, v, relTime, dIndex)
-                            outputToLog(string.format("Value: %s", val))
+                            outputToLogVar("Value", val)
                             if val ~= nil and val ~= '' then
                               local current_val
                               if v.plugin ~= nil then
@@ -313,7 +259,7 @@ local function processFile(context, filename )
                               else
                                 current_val = photo:getRawMetadata(v.id)
                               end
-                              outputToLog(string.format("Current value: %s", current_val))
+                              outputToLogVar("Current value", current_val)
                               if shouldWrite(v.id, prefs, current_val, val) then
                                   outputToLog("Writing new property value to catalog.")
                                   if v.plugin ~= nil then
@@ -321,23 +267,23 @@ local function processFile(context, filename )
                                   else
                                     photo:setRawMetadata(v.id, val)
                                   end
-                                  u = true
+                                  updated = true
                               end
                             end
                             outputToLog("/Property")
                           end
 
-                          if u then
+                          if updated then
                             outputToLog("Metadata updated.")
-                            updated = updated + 1
+                            numUpdated = numUpdated + 1
                           else
                             outputToLog("Metadata up to date.")
                           end
-                          outputToLog("end write access for " .. photoName)
+                          outputToLogVar("end write access for", photoName)
                     end)
 
                 end
-                outputToLog("Done processing " .. photo:getFormattedMetadata("fileName"))
+                outputToLogVar("Done processing photo/video",photo:getFormattedMetadata("fileName"))
 
                 progress:setPortionComplete( i, #foundPhotos )
                 outputToLog("Portion complete")
@@ -352,9 +298,9 @@ local function processFile(context, filename )
 
         fileProgress:done()
 
-        outputToLog("Number of photos: " .. count .. ". Updated: " .. updated)
+        outputToLog("Number of photos: " .. count .. ". Updated: " .. numUpdated)
 
-        return updated
+        return numUpdated
         -- print_r(foundPhotos)
 
 end
@@ -427,12 +373,12 @@ local function showFileDialog()
           canChooseDirectories = false,
           canCreateDirectories = false,
           fileTypes = {
-            'xml', 'udcf', 'uddf',
+            'xml', 'uddf',
           },
         })
 
         -- abort if no file was selected
-        if not files then
+        if files == nil or not files then
           outputToLog("No files selected, aborting.")
           return
         end
@@ -458,7 +404,8 @@ local function showFileDialog()
 
           for k,file in pairs(files) do
                 if mainProgress:isCanceled() then break end
-                outputToLog("Reading file " .. file)
+                if file == nil then break end
+                outputToLogVar("Reading file", file)
                 totalUpdated = totalUpdated + LrFunctionContext.callWithContext("processFile", processFile, file)
                 mainProgress:setPortionComplete(k,#files)
           end

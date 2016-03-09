@@ -9,6 +9,12 @@ local DLSdefaults = {
   doVideos = false,
 }
 
+outputToLog("DLSInit")
+
+outputToLog("Dive Log Sync")
+local info = require "Info"
+local currentVersion = info["VERSION"]
+outputToLog(string.format("Version: %d.%d.%d.%d", currentVersion.major, currentVersion.minor, currentVersion.revision, currentVersion.build))
 outputToLog("Plugin loaded.")
 local function setDefaultPreferences()
   local prefs = LrPrefs.prefsForPlugin()
