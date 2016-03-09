@@ -17,28 +17,31 @@ local conditionalItem 	= LrView.conditionalItem
 
 DLSDialogs = {}
 
-local function generateCheckboxTable(props, content, f)
+local function generateCheckboxTable(props, plugin, content, f)
   for k, prop in pairs(props) do
-    prop_populate = prop.id .. "_populate"
-    prop_overwrite = prop.id .. "_overwrite"
+    if (plugin and prop.plugin ~= nil) or (not plugin and prop.plugin == nil) then
 
-    content[#content+1] = f:row {
-      fill_horizontal = 1,
-      spacing = f:label_spacing(),
-      f:static_text {
-        title = prop.title,
-        width = LrView.share "label_width",
-      },
-      f:checkbox {
-        title = "",
-        width = LrView.share("populate_width"),
-        value = bind(prop_populate),
-      },
-      f:checkbox {
-        title = "",
-        value = bind(prop_overwrite),
-      },
-    }
+      prop_populate = prop.id .. "_populate"
+      prop_overwrite = prop.id .. "_overwrite"
+
+      content[#content+1] = f:row {
+        fill_horizontal = 1,
+        spacing = f:label_spacing(),
+        f:static_text {
+          title = prop.title,
+          width = LrView.share "label_width",
+        },
+        f:checkbox {
+          title = "",
+          width = LrView.share("populate_width"),
+          value = bind(prop_populate),
+        },
+        f:checkbox {
+          title = "",
+          value = bind(prop_overwrite),
+        },
+      }
+    end
   end
 end
 
@@ -74,7 +77,7 @@ function DLSDialogs.metadataSelectView(f, pt)
   }
 
 
-  generateCheckboxTable(DLSpropertyDefinitions.lightroom, content, f)
+  generateCheckboxTable(DLSpropertyDefinitions, false, content, f)
 
   content[#content+1] = f:separator {
     margin_top = 100,
@@ -107,7 +110,7 @@ function DLSDialogs.metadataSelectView(f, pt)
     },
   }
 
-  generateCheckboxTable(DLSpropertyDefinitions.plugin, content, f)
+  generateCheckboxTable(DLSpropertyDefinitions, true, content, f)
 
   content[#content+1] = f:static_text {
       title = [[When 'Populate' is selected, data from log file for that property will be copied only if the property is empty in Lightroom.

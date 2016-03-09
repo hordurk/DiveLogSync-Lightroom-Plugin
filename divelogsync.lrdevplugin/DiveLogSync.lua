@@ -92,9 +92,43 @@ local function interpolate(x, x0, x1, y0, y1)
   return (y0 + (y1-y0) * (x-x0)/(x1-x0))
 end
 
+local function compare(val1,val2)
+  if type(val1)~=type(val2) then
+    return false
+  end
+
+  if type(val1)=="table" then
+    if val1==val2 then
+      return true
+    end
+    for k,v in pairs(val1) do
+      if val2[k] == nil or not compare(v,val2[k]) then
+        return false
+      end
+    end
+    for k,v in pairs(val2) do
+      if val1[k] == nil or not compare(v,val1[k]) then
+        return false
+      end
+    end
+    return true
+  elseif type(val1)=="number" then
+    if math.abs(val1-val2) < 0.0001 then
+      return true
+    else
+      return false
+    end
+  else
+    if val1==val2 then
+      return true
+    else
+      return false
+    end
+  end
+end
+
 local function shouldWrite(id, prefs, current_val, new_val)
-  -- TODO add support for comparing tables, such as GPS.
-  if current_val == new_val then
+  if compare(current_val,new_val) then
     return false
   end
 
@@ -114,7 +148,6 @@ end
 local function extractValue(diveData, prop_desc, relTime, i)
   local id = prop_desc.id
   local val
-  outputToLog("extractValue: " .. id)
 
   if prop_desc.c_id ~= nil then
     id = prop_desc.c_id
@@ -185,8 +218,7 @@ local function processFile(context, filename )
     fileProgress:setPortionComplete( 0, #divesData )
 
     local catalog = LrApplication.activeCatalog()
-    catalog:withWriteAccessDo("Sync metadata from " .. LrPathUtils.leafName(filename),
-        function(context)
+
 
     for diveNo, diveData in pairs(divesData) do
         if fileProgress:isCanceled() then break end
@@ -194,10 +226,10 @@ local function processFile(context, filename )
             outputToLog("Finding photos between " .. LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d %H:%M:%S" ) .. " and " .. LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d %H:%M:%S" ))
 
             local progress = LrProgressScope({
-            caption = "Matching photos with dive profile",
-            functionContext = context,
-            parent = fileProgress,
-          })
+              caption = "Matching photos with dive profile",
+              functionContext = context,
+              parent = fileProgress,
+            })
             progress:setCancelable(true)
 
             local captureTimeSearchDesc = {
@@ -205,16 +237,16 @@ local function processFile(context, filename )
               operation = "in",
               value = LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d" ),
               value2 = LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d" ),
-          }
+            }
             local searchDesc = {
               captureTimeSearchDesc,
-            {
-                criteria = "fileFormat",
-                operation = "!=",
-                value = "VIDEO",
-            },
-            combine = "intersect",
-          }
+              {
+                  criteria = "fileFormat",
+                  operation = "!=",
+                  value = "VIDEO",
+              },
+              combine = "intersect",
+            }
 
             if(prefs.doVideos) then
               searchDesc = captureTimeSearchDesc
@@ -224,21 +256,7 @@ local function processFile(context, filename )
               sort = "captureTime",
               ascending = true,
               searchDesc = searchDesc,
-              -- searchDesc = {
-              --     iif(prefs.doVideos, {}, {
-              --         criteria = "fileFormat",
-              --         operation = "!=",
-              --         value = "VIDEO",
-              --     }),
-              --     {
-              --         criteria = "captureTime",
-              --         operation = "in",
-              --         value = LrDate.timeToUserFormat( diveData.start_date, "%Y-%m-%d" ),
-              --         value2 = LrDate.timeToUserFormat( diveData.end_date, "%Y-%m-%d" ),
-              --     },
-              --     combine = "intersect",
-              -- }
-          }
+            }
 
             progress:setPortionComplete( 0, #foundPhotos )
 
@@ -248,7 +266,8 @@ local function processFile(context, filename )
             for k, photo in pairs( foundPhotos) do
                 if progress:isCanceled() then break end
                 i = i + 1
-                outputToLog("Processing photo: " .. photo:getFormattedMetadata("fileName"))
+                local photoName = photo:getFormattedMetadata("fileName")
+                outputToLog("Processing photo: " .. photoName)
 
                 -- Lightroom has multiple datetimes for a photo. Fetch them all for debug output.
                 local dateTimeOriginal = photo:getRawMetadata("dateTimeOriginal")
@@ -276,51 +295,46 @@ local function processFile(context, filename )
                         dIndex = dIndex + 1
                     end
 
+                    catalog:withWriteAccessDo("metadata update for " .. LrPathUtils.leafName(photoName),
+                        function(context)
+                          outputToLog("start write access for " .. photoName)
 
                           local u = false
-                          for k,v in pairs(DLSpropertyDefinitions.lightroom) do
+                          for k,v in pairs(DLSpropertyDefinitions) do
                             outputToLog(string.format("Property: %s.", v.id))
                             local val = extractValue(diveData, v, relTime, dIndex)
                             outputToLog(string.format("Value: %s", val))
                             if val ~= nil and val ~= '' then
                               local current_val
-                              if v.type ~= nil and v.type == 'string' then
+                              if v.plugin ~= nil then
+                                current_val = photo:getPropertyForPlugin(v.plugin, v.id)
+                              elseif v.type ~= nil and v.type == 'string' then
                                 current_val = photo:getFormattedMetadata(v.id)
                               else
                                 current_val = photo:getRawMetadata(v.id)
                               end
                               outputToLog(string.format("Current value: %s", current_val))
                               if shouldWrite(v.id, prefs, current_val, val) then
-                                outputToLog("Writing new property value to catalog.")
-                                  photo:setRawMetadata(v.id, val)
-                                  u = true
-                              end
-                            end
-                            outputToLog("/Property")
-                          end
-                          for k,v in pairs(DLSpropertyDefinitions.plugin) do
-                            outputToLog(string.format("Property: %s.", v.id))
-                            local val = extractValue(diveData, v, relTime, dIndex)
-                            outputToLog(string.format("Value: %s", val))
-                            if val ~= nil and val ~= '' then
-                              local current_val = photo:getPropertyForPlugin(v.plugin, v.id)
-                              outputToLog(string.format("Current value: %s", current_val))
-
-                              if shouldWrite(v.id, prefs, current_val, val) then
                                   outputToLog("Writing new property value to catalog.")
-                                  photo:setPropertyForPlugin(v.plugin, v.id, val)
+                                  if v.plugin ~= nil then
+                                    photo:setPropertyForPlugin(v.plugin, v.id, val)
+                                  else
+                                    photo:setRawMetadata(v.id, val)
+                                  end
                                   u = true
                               end
                             end
                             outputToLog("/Property")
                           end
-                          outputToLog(u)
-                          outputToLog(updated)
-                          if u then
-                            updated = updated + 1
-                          end
-                          outputToLog("exit write access")
 
+                          if u then
+                            outputToLog("Metadata updated.")
+                            updated = updated + 1
+                          else
+                            outputToLog("Metadata up to date.")
+                          end
+                          outputToLog("end write access for " .. photoName)
+                    end)
 
                 end
                 outputToLog("Done processing " .. photo:getFormattedMetadata("fileName"))
@@ -334,7 +348,7 @@ local function processFile(context, filename )
 
         end
 
-      end)
+
 
         fileProgress:done()
 
@@ -379,6 +393,13 @@ end
 
 local function showFileDialog()
   local prefs = LrPrefs.prefsForPlugin()
+
+  outputToLog("\n\n\n===============================\n\n\n")
+  outputToLog("Starting Dive Log Sync")
+  local info = require "Info"
+  local currentVersion = info["VERSION"]
+  outputToLog(string.format("Version: %d.%d.%d.%d", currentVersion.major, currentVersion.minor, currentVersion.revision, currentVersion.build))
+
 
   outputToLog("Preferences:")
   for k,v in prefs:pairs() do

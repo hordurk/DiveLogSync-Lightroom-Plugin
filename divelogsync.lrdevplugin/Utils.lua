@@ -116,7 +116,6 @@ end
 
 DLSpropertyDefinitions =
 {
-  lightroom = {
     {
       title = 'Altitude',
       id = 'gpsAltitude',
@@ -156,8 +155,6 @@ DLSpropertyDefinitions =
       plugin = nil,
       type = 'string',
     },
-  },
-  plugin = {
     {
       title = 'Run time',
       id = 'run_time',
@@ -200,6 +197,5 @@ DLSpropertyDefinitions =
       id = 'id',
       plugin = _PLUGIN,
       type = 'string',
-    }
-  },
+    },
 }
