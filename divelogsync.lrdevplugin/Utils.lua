@@ -72,7 +72,11 @@ end
 
 local function convertDepth(val)
   local prefs = LrPrefs.prefsForPlugin()
-  if prefs.units ~= 'm' then
+  if val == nil then
+    return 0
+  end
+
+  if prefs.units ~= nil and prefs.units ~= 'm' then
     val = val * 3.28084
   end
 
@@ -80,12 +84,19 @@ local function convertDepth(val)
 end
 
 local function convertAltitude(val)
+  if val == nil then
+    return 0
+  end
   return -val
 end
 
 local function convertTemperature(val)
   local prefs = LrPrefs.prefsForPlugin()
-  if prefs.units ~= 'm' then
+  if val == nil then
+    return 0
+  end
+
+  if prefs.units ~= nil and prefs.units ~= 'm' then
     val = val * 1.8 + 32
   end
 
@@ -94,7 +105,11 @@ end
 
 local function getLatLon(vals,i)
   if vals.lat ~= nil and vals.lat ~= '' and vals.lat ~= 0 and vals.lon ~= nil and vals.lon ~= '' and vals.lon ~= 0 then
-    return { latitude = tonumber(vals.lat), longitude = tonumber(vals.lon) }
+    local lat = tonumber(vals.lat)
+    local lon = tonumber(vals.lon)
+    if lat ~= nil and lon ~= nil then
+      return { latitude = lat, longitude = lon }
+    end
   end
   return nil
 end
