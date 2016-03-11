@@ -130,12 +130,205 @@ local function extractValue(diveData, prop_desc, relTime, i)
   return nil
 end
 
+local function parseCsv(data, header_mapping, delimiter)
+  outputToLog("parseCsv. delimiter: " .. delimiter)
+  print_r(data)
+  outputToLog("Header mapping:")
+  print_r(header_mapping)
+
+
+  local lines = split(data,"\n")
+  print_r(lines)
+  -- process 1st line, check header mapping
+  local headers = {}
+  local headerParts = split(lines[1],delimiter)
+  for k,v in pairs(headerParts) do
+    if header_mapping[v] ~= nil then
+      headers[k] = header_mapping[v]
+    end
+  end
+  print_r(headers)
+
+  local res = {}
+  for i=2,#lines do
+    local entry = {}
+    local p = split(lines[i],delimiter)
+    for k,v in pairs(headers) do
+      if p[k] ~= nil then
+        entry[v.id] = v.func(p[k])
+      end
+    end
+    res[#res+1] = entry
+  end
+
+  print_r(res)
+
+  return res
+
+end
+
+
+local function parseZXUFile(filename)
+  local data = LrFileUtils.readFile(filename)
+  outputToLog("Parsing ZXU file")
+
+  if string.sub(data, 1, 4) ~= "FSH|" then
+    outputToLog("Invalid file header")
+    return nil
+  end
+
+  local headers = {'ZRH','ZAR','ZDH','ZDP'}
+  local segments = {}
+  for k,h in pairs(headers) do
+    local pos = string.find(data, h)
+    local f = string.sub(data, pos+string.len(h), pos+string.len(h))
+    if f == '|' then
+      segments[h] = string.sub(data, pos+string.len(h)+1, string.find(data, "\n", pos)-1)
+    elseif f == '{' then
+      segments[h] = string.sub(data, pos+string.len(h)+1, string.find(data, "}", pos)-1)
+    else
+      -- ?
+    end
+  end
+
+  outputToLog("Segments:")
+  print_r(segments)
+
+  local res = {}
+  local depthFunc = tonumber
+  local tempFunc = tonumber
+
+  if segments['ZRH'] ~= nil then
+    local parts = split(segments['ZRH'],"|")
+
+    local depthUnit = parts[5-1]
+    if depthUnit == "FFWG" or depthUnit == "FSWG" then
+      depthFunc = fromFeet
+    end
+
+    local tempUnit = parts[7-1]
+    if tempUnit == "F" then
+      tempFunc = fromFahrenheit
+    elseif tempUnit == "K" then
+      tempFunc = fromKelvin
+    end
+  end
+
+  if segments['ZAR'] ~= nil then
+    -- Parse some strings from known formats.
+
+    -- DiverLog
+    local id = string.match(segments['ZAR'],"<DUID>(.*)</DUID>")
+    if id ~= nil and id ~= "" then
+      res.id = id
+    end
+    local location = string.match(segments['ZAR'],"DIVESITE=%[([^%].]*)%]")
+    if location ~= nil and location ~= "" then
+      res.location = location
+    end
+    local country = string.match(segments['ZAR'],"LOCNAME=%[([^%].]*)%]")
+    if country ~= nil and country ~= "" then
+      res.country = country
+    end
+
+
+  end
+
+  if segments['ZDH'] ~= nil then
+    local parts = split(segments['ZDH'],"|")
+    res.dive_number = tonumber(parts[2])
+    res.start_date = toLrDate(parseDateStamp(parts[5]))
+  else
+    outputToLog("ZDH section missing")
+    return nil
+  end
+
+  if segments['ZDP'] ~= nil then
+    res.profile = {}
+    local lastTemp = 0
+    local lines = split(segments['ZDP'],"\n")
+    for k,line in pairs(lines) do
+      local parts = split(line,"|")
+      if #parts >= 3 then
+        if parts[8 +1] ~= "" then
+          lastTemp = tempFunc(parts[8 +1])
+        end
+        local sample = {
+          run_time = fromMinutes(parts[1 +1]),
+          depth = depthFunc(parts[2 +1]),
+          temperature = lastTemp,
+        }
+        res.profile[#res.profile+1] = sample
+      end
+    end
+    res.duration = res.profile[#res.profile].run_time
+    res.end_date = res.start_date + res.duration
+  else
+    outputToLog("ZDP section missing")
+    return nil
+  end
+
+  return res
+end
+
+local function parseTxtFile(filename)
+  local res = nil
+
+  local data = LrFileUtils.readFile(filename)
+
+  local header_mapping = {}
+  header_mapping["Elapsed Dive Time (hr:min)"] = {id="run_time",func=timeToSeconds}
+  header_mapping["Depth(FT)"] = {id="depth",func=fromFeet}
+  header_mapping["Depth(m)"] = {id="depth",func=tonumber}
+  header_mapping["Temperature(FT)"] = {id="water_temperature",func=fromFahrenheit}
+  header_mapping["Temperature(m)"] = {id="water_temperature",func=tonumber}
+
+  if string.sub(data,1,string.len("Life Time Dive")) == "Life Time Dive" then
+    res = {}
+    res.id = LrPathUtils.leafName(LrPathUtils.removeExtension(filename))
+    outputToLog("Detected DiverLog format")
+    local dive_date
+    local dive_time
+    data = string.gsub( data, "[-]+[-]+[-]*", "===" ) -- replace 2 or more - with triple =
+    local parts = split( data, "\n\n" )
+    for k,v in pairs(split(parts[1], "\n")) do
+      local p = split(v, ": ")
+      if p[1] == "Life Time Dive #" then
+        res.dive_number = tonumber(p[2])
+      elseif p[1] == "Dive Date" then
+        dive_date = string.gsub(p[2],"/","-")
+      elseif p[1] == "Dive Time" then
+        dive_time = p[2]
+      end
+    end
+
+    local lastParts = split(parts[#parts], "===")
+    local csvPart = lastParts[#lastParts]
+
+    res.profile = parseCsv(csvPart, header_mapping, "[;,\t]")
+    res.duration = res.profile[#res.profile].run_time
+    res.start_date = toLrDate(parseDate(dive_date .. " " .. dive_time))
+    res.end_date = res.start_date + res.duration
+  end
+  return res
+end
 
 
 local function processFile(context, filename )
   local prefs = LrPrefs.prefsForPlugin()
 
-    local divesData = parseXmlFile(filename)
+  local ext = LrPathUtils.extension(filename)
+  local divesData
+
+  if string.lower(ext) == "xml" then
+    divesData = parseXmlFile(filename)
+  elseif string.lower(ext) == "txt" then
+    divesData = parseTxtFile(filename)
+  elseif string.lower(ext) == "zxu" then
+    divesData = parseZXUFile(filename)
+  else
+    LrDialogs.message("Unsupported format: " .. filename)
+  end
 
     if divesData == nil then
         LrDialogs.message( "Unable to parse file: " .. filename )
@@ -367,13 +560,13 @@ local function showFileDialog()
 
       local files = LrDialogs.runOpenPanel(
         {
-          title = "Select Petrel XML",
+          title = "Select dive logs",
           canChooseFiles = true,
           allowsMultipleSelection = true,
           canChooseDirectories = false,
           canCreateDirectories = false,
           fileTypes = {
-            'xml', 'uddf',
+            'xml', 'uddf', 'txt', 'zxu'
           },
         })
 

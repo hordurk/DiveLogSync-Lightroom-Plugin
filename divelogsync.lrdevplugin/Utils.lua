@@ -78,6 +78,18 @@ function print_r ( t )
     outputToLog()
 end
 
+function timeToSeconds(t)
+  local parts = split(t,":")
+  local h = tonumber(parts[1])
+  local m = tonumber(parts[2])
+  local s = 0
+  if #parts==3 then
+    s = tonumber(parts[3])
+  end
+  return s+m*60+h*3600
+end
+
+-- format: 2015-02-27 14:31:27
 function parseDate( dateString )
     local parts = split(dateString,' ')
     local dateParts = split(parts[1],'-')
@@ -88,9 +100,26 @@ function parseDate( dateString )
     res.day = tonumber(dateParts[3])
     res.hour = tonumber(timeParts[1])
     res.minute = tonumber(timeParts[2])
-    res.second = tonumber(timeParts[3])
+    if #timeParts>=3 then -- handle format missing seconds
+      res.second = tonumber(timeParts[3])
+    else
+      res.second = 0
+    end
     return res
 end
+
+-- format: 20151227124600
+function parseDateStamp (s)
+  local res = {}
+  res.year = tonumber(string.sub(s,1,4))
+  res.month = tonumber(string.sub(s,5,6))
+  res.day = tonumber(string.sub(s,7,8))
+  res.hour = tonumber(string.sub(s,9,10))
+  res.minute = tonumber(string.sub(s,11,12))
+  res.second = tonumber(string.sub(s,13,14))
+  return res
+end
+
 
 function toLrDate( d )
     return LrDate.timeFromComponents( d.year, d.month, d.day, d.hour, d.minute, d.second, true )
@@ -142,6 +171,39 @@ function compare(val1,val2)
     end
   end
 end
+
+function fromFeet(val)
+  val = tonumber(val)
+  if val == nil then
+    return 0
+  end
+  return 0.3048 * val
+end
+
+function fromFahrenheit(val)
+  val = tonumber(val)
+  if val == nil then
+    return 0
+  end
+  return (val - 32) * 0.55555555555
+end
+
+function fromKelvin(val)
+  val = tonumber(val)
+  if val == nil then
+    return 0
+  end
+  return val - 273.15
+end
+
+function fromMinutes(val)
+  val = tonumber(val)
+  if val == nil then
+    return 0
+  end
+  return val * 60
+end
+
 
 local function convertDepth(val)
   local prefs = LrPrefs.prefsForPlugin()
