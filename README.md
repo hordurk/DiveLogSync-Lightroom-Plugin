@@ -24,6 +24,10 @@ It currently supports XML files exported from:
 - Diving Log (Tested with exports from 6.0)
 - Shearwater Desktop
 
+Other supported formats (non-xml):
+- CSV text files from DiverLog
+- DAN DL7 ZXU files (tested with files from Shearwater Desktop, MacDive and DiverLog)
+
 In development:
 - UDDF (not properly tested yet)
 - UDCF
